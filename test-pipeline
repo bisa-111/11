@@ -1,0 +1,703 @@
+PUT _ingest/pipeline/test-pipeline
+{
+  "description": "it is a test-pipeline for new one to study",
+  "processors": [
+    {
+      "date": {
+        "ignore_failure": true,
+        "formats": [
+          "yyyy-MM-dd HH:mm:ss",
+          "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+          "epoch_millis"
+        ],
+        "field": "startTime",
+        "target_field": "@timestamp",
+        "if": "ctx.startTime != null && ctx['@timestamp'] == null"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "srcAddress",
+        "target_field": "source.ip"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "destAddress",
+        "target_field": "destination.ip"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "srcPort",
+        "target_field": "source.port"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "source.port",
+        "type": "integer"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "destPort",
+        "target_field": "destination.port"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "destination.port",
+        "type": "integer"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "srcMacAddress",
+        "target_field": "source.mac"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "transProtocol",
+        "target_field": "network.transport"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "appProtocol",
+        "target_field": "network.protocol"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "vxlanId",
+        "target_field": "network.vxlan.id"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "requestMethod",
+        "target_field": "http.request.method"
+      }
+    },
+    {
+      "set": {
+        "field": "url.full",
+        "value": "{{destHostName}}{{requestUrl}}"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "httpVersion",
+        "target_field": "http.version"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "responseCode",
+        "target_field": "http.response.status_code"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "http.response.status_code",
+        "type": "integer"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "accessAgent",
+        "target_field": "user_agent.original"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "bytesIn",
+        "target_field": "http.request.bytes"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "http.request.bytes",
+        "type": "integer"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "bytesOut",
+        "target_field": "http.response.bytes"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "http.response.bytes",
+        "type": "integer"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "responseMsg",
+        "target_field": "http.response.body.content"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "destHostName",
+        "target_field": "url.domain"
+      }
+    },
+    {
+      "rename": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "name",
+        "target_field": "event.action"
+      }
+    },
+    {
+      "rename": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "severity",
+        "target_field": "event.severity"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "event.severity",
+        "type": "long"
+      }
+    },
+    {
+      "rename": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "eventId",
+        "target_field": "event.id"
+      }
+    },
+    {
+      "set": {
+        "field": "event.category",
+        "value": "[web]"
+      }
+    },
+    {
+      "set": {
+        "field": "event.type",
+        "value": "[access]"
+      }
+    },
+    {
+      "set": {
+        "field": "event.kind",
+        "value": "event"
+      }
+    },
+    {
+      "set": {
+        "ignore_failure": true,
+        "ignore_empty_value": true,
+        "field": "source.geo.country_name",
+        "copy_from": "srcGeoCountry"
+      }
+    },
+    {
+      "set": {
+        "ignore_failure": true,
+        "field": "source.geo.region_name",
+        "copy_from": "srcGeoRegion"
+      }
+    },
+    {
+      "set": {
+        "ignore_failure": true,
+        "field": "source.geo.city_name",
+        "copy_from": "srcGeoCity"
+      }
+    },
+    {
+      "set": {
+        "field": "source.geo.location",
+        "value": {
+          "lat": "{{srcGeoLatitude}}",
+          "lon": "{{srcGeoLongitude}}"
+        }
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "destination.geo.country_name",
+        "copy_from": "destGeoCountry"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "destination.geo.region_name",
+        "copy_from": "destGeoRegion"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "destination.geo.city_name",
+        "copy_from": "destGeoCity"
+      }
+    },
+    {
+      "set": {
+        "field": "destination.geo.location",
+        "value": {
+          "lat": "{{destGeoLatitude}}",
+          "lon": "{{destGeoLongitude}}"
+        }
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "deviceAddress",
+        "target_field": "observer.ip"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "deviceProductType",
+        "target_field": "observer.type"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "deviceName",
+        "target_field": "observer.name"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "deviceVersion",
+        "target_field": "observer.version"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "srcSecurityZone",
+        "target_field": "source.zone"
+      }
+    },
+    {
+      "rename": {
+        "ignore_failure": true,
+        "field": "destSecurityZone",
+        "target_field": "destination.zone"
+      }
+    },
+    {
+      "script": {
+        "ignore_failure": true,
+        "source": "if (ctx.requestHeader != null && !ctx.requestHeader.isEmpty()) {\r\n            def headers = [:];\r\n            String[] lines = ctx.requestHeader.split(\"<br/>\");\r\n            for (line in lines) {\r\n              String trimmed = line.trim();\r\n              if (trimmed.isEmpty()) continue;\r\n              int idx = trimmed.indexOf(':');\r\n              if (idx > 0) {\r\n                headers.put(trimmed.substring(0, idx).trim(), trimmed.substring(idx + 1).trim());\r\n              }\r\n            }\r\n            if (ctx.http == null) ctx.http = [:];\r\n            if (ctx.http.request == null) ctx.http.request = [:];\r\n            ctx.http.request.headers = headers;\r\n          }\r\n          // 解析响应头（仅当responseHeader非空时执行）\r\n          if (ctx.responseHeader != null && !ctx.responseHeader.isEmpty()) {\r\n            def headers = [:];\r\n            String[] lines = ctx.responseHeader.split(\"<br/>\");\r\n            for (line in lines) {\r\n              String trimmed = line.trim();\r\n              if (trimmed.isEmpty()) continue;\r\n              int idx = trimmed.indexOf(':');\r\n              if (idx > 0) {\r\n                headers.put(trimmed.substring(0, idx).trim(), trimmed.substring(idx + 1).trim());\r\n              }\r\n            }\r\n            if (ctx.http == null) ctx.http = [:];\r\n            if (ctx.http.response == null) ctx.http.response = [:];\r\n            ctx.http.response.headers = headers;\r\n          }",
+        "lang": "painless"
+      }
+    },
+    {
+      "remove": {
+        "field": [
+          "startTime",
+          "endTime",
+          "collectorReceiptTime",
+          "requestHeader",
+          "srcGeoRegion",
+          "srcGeoCity",
+          "srcGeoLongitude",
+          "srcGeoLatitude",
+          "destGeoCountry",
+          "destGeoRegion",
+          "destGeoCity",
+          "destGeoLongitude",
+          "destGeoLatitude",
+          "sendHostAddress",
+          "machineCode",
+          "vxlanid",
+          "agentOID",
+          "productVendorName",
+          "eventCount",
+          "deviceSendProductName",
+          "dataType",
+          "dataSubType",
+          "catBehavior",
+          "deviceCat",
+          "catObject",
+          "catSignificance",
+          "catTechnique",
+          "webAccess",
+          "deviceReceiptTime",
+          "srcGeoCountry",
+          "interfaceName",
+          "logSessionId",
+          "deviceId",
+          "txId",
+          "responseHeader",
+          "agent0ID"
+        ],
+        "ignore_missing": true
+      }
+    },
+    {
+      "set": {
+        "field": "error.message",
+        "value": "{{_ingest.on_failure_message}}"
+      }
+    },
+    {
+      "rename": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "catOutcome",
+        "target_field": "event.outcome"
+      }
+    },
+    {
+      "remove": {
+        "field": [
+          "sendHostAddress",
+          "deviceSendProductName",
+          "requestBody_parsed",
+          "response_body_parsed"
+        ],
+        "ignore_missing": true
+      }
+    },
+    {
+      "set": {
+        "field": "network.direction",
+        "value": "{{direction}}"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "source.geo.location.lat",
+        "type": "float"
+      }
+    },
+    {
+      "convert": {
+        "ignore_failure": true,
+        "ignore_missing": true,
+        "field": "source.geo.location.lon",
+        "type": "float"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "productVendorName",
+        "target_field": "observer.vendor"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "deviceSendProductName",
+        "target_field": "observer.product"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "field": "eventCount",
+        "target_field": "event.count"
+      }
+    },
+    {
+      "convert": {
+        "ignore_missing": true,
+        "field": "event.count",
+        "type": "integer"
+      }
+    },
+    {
+      "json": {
+        "ignore_failure": true,
+        "field": "requestBody",
+        "target_field": "requestBody_parsed"
+      }
+    },
+    {
+      "json": {
+        "ignore_failure": true,
+        "field": "http.response.body.content",
+        "target_field": "response_body_parsed"
+      }
+    },
+    {
+      "json": {
+        "ignore_failure": true,
+        "field": "response_body_parsed.data.session.messages.0.content",
+        "target_field": "response_session_content_parsed"
+      }
+    },
+    {
+      "json": {
+        "ignore_failure": true,
+        "field": "response_body_parsed.data.results.toolOutput",
+        "target_field": "response_tool_output_parsed"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.is_malicious",
+        "copy_from": "response_body_parsed.data.session.messages.0.content.data.attackJudge.isMalicious"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.judge_result",
+        "copy_from": "response_body_parsed.data.session.messages.0.content.data.attackJudge.judgeResult"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.request.original_attack_name",
+        "copy_from": "requestBody_parsed.inputs.toolParams.name"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.request.original_payload",
+        "copy_from": "requestBody_parsed.inputs.toolParams.requestHeader"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.is_malicious",
+        "copy_from": "response_body_parsed.data.session.messages.0.content.data.attackJudge.isMalicious"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.judge_result",
+        "copy_from": "response_body_parsed.data.session.messages.0.content.data.attackJudge.judgeResult"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.confidence_score",
+        "copy_from": "response_body_parsed.data.session.messages.0.content.data.attackJudge.confidenceScore"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.attack_type",
+        "copy_from": "response_body_parsed.data.session.messages.0.content.data.attackJudge.attackType"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.attack_intent",
+        "copy_from": "response_body_parsed.data.session.messages.0.content.data.intentJudge.attackIntent"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.request.toolName",
+        "copy_from": "requestBody_parsed.inputs.toolName"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.request.original_event_id",
+        "copy_from": "requestBody_parsed.inputs.toolParams.eventId"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.is_malicious",
+        "copy_from": "response_session_content_parsed.data.attackJudge.isMalicious"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.judge_result",
+        "copy_from": "response_session_content_parsed.data.attackJudge.judgeResult"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.confidence_score",
+        "copy_from": "response_session_content_parsed.data.attackJudge.confidenceScore"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.payload",
+        "copy_from": "response_session_content_parsed.data.payloadAnalyze.payload"
+      }
+    },
+    {
+      "set": {
+        "ignore_empty_value": true,
+        "field": "attack.result.attack_type",
+        "copy_from": "response_session_content_parsed.data.attackJudge.attackType"
+      }
+    },
+    {
+      "remove": {
+        "field": [
+          "requestBody_parsed",
+          "response_body_parsed",
+          "response_session_content_parsed",
+          "response_tool_output_parsed"
+        ],
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "description": "requestUrlQuery-url.query",
+        "field": "requestUrlQuery",
+        "target_field": "url.query"
+      }
+    },
+    {
+      "rename": {
+        "ignore_missing": true,
+        "description": "responseContentType-http.response.mime_type",
+        "field": "responseContentType",
+        "target_field": "http.response.mime_type"
+      }
+    },
+    {
+      "json": {
+        "ignore_failure": true,
+        "field": "http.response.body.content",
+        "target_field": "http.response.body.parsed"
+      }
+    },
+    {
+      "json": {
+        "field": "requestBody",
+        "target_field": "parsed_request",
+        "ignore_failure": true
+      }
+    },
+    {
+      "rename": {
+        "field": "parsed_request.inputs",
+        "target_field": "event_details",
+        "ignore_missing": true
+      }
+    },
+    {
+      "split": {
+        "field": "event_details.requestHeader",
+        "separator": "<br/>",
+        "target_field": "request_header_lines",
+        "ignore_missing": true
+      }
+    },
+    {
+      "kv": {
+        "field": "request_headers_lines",
+        "field_split": ":",
+        "value_split": "",
+        "target_field": "request_headers",
+        "ignore_missing": true
+      }
+    },
+    {
+      "split": {
+        "field": "event_details.responseHeader",
+        "separator": "<br/>",
+        "target_field": "response_header_lines",
+        "ignore_missing": true
+      }
+    },
+    {
+      "kv": {
+        "field": "response_header_lines",
+        "field_split": ":",
+        "value_split": "",
+        "target_field": "response_headers",
+        "ignore_missing": true
+      }
+    },
+    {
+      "grok": {
+        "field": "request_headers.Referer",
+        "patterns": [
+          "%{URIPARAM:url_params}"
+        ],
+        "ignore_missing": true
+      }
+    },
+    {
+      "script": {
+        "ignore_failure": true,
+        "description": "保留有效数据，令空值字段不显示",
+        "source": " // 定义递归函数：检查并删除Map中的空值字段\r\n      void cleanEmptyFields(Map map) {\r\n        // 遍历当前Map的所有字段（复制keySet避免遍历中修改结构导致异常）\r\n        def fields = new ArrayList(map.keySet());\r\n        for (def field : fields) {\r\n          def value = map.get(field);\r\n          \r\n          // 跳过系统字段（如@timestamp、_ingest等，避免误删核心元数据）\r\n          if (field.startsWith(\"@\") || field.startsWith(\"_\")) {\r\n            continue;\r\n          }\r\n          \r\n          // 判断是否为空值（null、空字符串、空数组、空Map）\r\n          boolean isEmpty = false;\r\n          if (value == null) {\r\n            isEmpty = true;\r\n          } else if (value instanceof String) {\r\n            isEmpty = value.trim().isEmpty(); // 空字符串或纯空格\r\n          } else if (value instanceof List) {\r\n            isEmpty = value.isEmpty(); // 空数组\r\n          } else if (value instanceof Map) {\r\n            // 如果是嵌套Map，先递归清理子字段\r\n            cleanEmptyFields(value);\r\n            // 子字段清理后，若当前Map为空，则标记为需删除\r\n            isEmpty = value.isEmpty();\r\n          }\r\n          \r\n          // 空值字段执行删除\r\n          if (isEmpty) {\r\n            map.remove(field);\r\n          }\r\n        }\r\n      }\r\n      \r\n      // 从根节点（ctx）开始清理（ctx是整个文档的Map）\r\n      cleanEmptyFields(ctx);",
+        "lang": "painless"
+      }
+    },
+    {
+      "kv": {
+        "field": "referer_params",
+        "field_split": "&",
+        "value_split": "=",
+        "target_field": "parsed_refer_params",
+        "ignore_missing": true
+      }
+    }
+  ]
+}
