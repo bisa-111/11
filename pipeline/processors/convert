@@ -1,1 +1,9 @@
-
+转换字段的数据类型。支持类型：`integer`, `long`, `float`, `double`, `string`, `boolean`, `auto` (自动推断)。
+        ```json
+        {
+          "convert": {
+            "description": "Convert string_count to integer",
+            "field": "string_count",
+            "type": "integer"
+          }
+        }
