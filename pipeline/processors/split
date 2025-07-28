@@ -1,0 +1,11 @@
+将字符串字段按分隔符拆分成数组。
+示例如下：
+        ```json
+        {
+          "split": {
+            "field": "tags",
+            "separator": ","
+          }
+        }
+        ```
+           `"tag1,tag2,tag3"` -> `["tag1", "tag2", "tag3"]`
