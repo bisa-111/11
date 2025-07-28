@@ -1,1 +1,17 @@
-
+使用基于正则表达式的模式从非结构化文本字段（如日志行）中提取结构化字段。
+       ES 内置了大量常用模式（如 `%{IP:client}`, `%{NUMBER:bytes}`, `%{TIMESTAMP_ISO8601:timestamp}`）。
+       语法:
+        ```json
+        {
+          "grok": {
+            "field": "message", // 要解析的原始字段
+            "patterns": ["%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes:int} %{NUMBER:duration:float}"], // 匹配模式
+            "pattern_definitions": { // 可选：自定义模式
+              "CUSTOMLOG": "\[%{TIMESTAMP_ISO8601:timestamp}\] %{LOGLEVEL:level} ..."
+            },
+            "trace_match": true // 可选：调试时打开，显示匹配详情
+          }
+        }
+        ```
+       示例日志: `"55.3.244.1 GET /index.html 15824 0.043"`
+       提取后: 会创建新字段 `client: "55.3.244.1"`, `method: "GET"`, `request: "/index.html"`, `bytes: 15824` (整数), `duration: 0.043` (浮点数)。
