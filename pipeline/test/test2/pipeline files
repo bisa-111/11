@@ -1,0 +1,174 @@
+[
+  {
+    "gsub": {
+      "pattern": "\"",
+      "ignore_failure": true,
+      "field": "message",
+      "replacement": "\\\""
+    }
+  },
+  {
+    "grok": {
+      "ignore_missing": true,
+      "field": "message",
+      "pattern_definitions": {
+        "TIMESTAMP_ISO8601": "%{YEAR}-%{MONTHNUM}-%{MONTHDAY} %{HOUR}:%{MINUTE}:%{SECOND}"
+      },
+      "patterns": [
+        "%{MONTH:month} %{MONTHDAY:day} %{TIME:time} %{YEAR:year} dbapp APT~%{DATA:app_type}~%{DATA:fixed_field}~%{TIMESTAMP_ISO8601:event.ingested}~%{DATA:source.ip_port}~%{DATA:destination.ip_port}~%{DATA:rule.category}~%{DATA:rule.name}~%{DATA:message}~%{DATA:event.severity}~%{DATA:event.id}~%{DATA:file.name}~%{DATA:payload}~%{DATA:hash.md5}~%{DATA:host.name}~%{DATA:http.response.status_code}~%{DATA:threat.tactic.stage}~%{DATA:network.direction}~%{DATA:source.mac}~%{DATA:destination.mac}~%{DATA:http.response.body.bytes}~%{DATA:http.request.headers}~%{DATA:http.request.body}~%{DATA:http.response.body}~%{DATA:file.type}~%{DATA:event.outcome}~%{DATA:threat.technique.id}~%{DATA:threat.technique.subtechnique.id}~%{DATA:rule.id}~%{DATA:knowledge.id}"
+      ]
+    }
+  },
+  {
+    "date": {
+      "formats": [
+        "yyyy-MM-dd HH:mm:ss"
+      ],
+      "field": "event.ingested",
+      "target_field": "@timestamp"
+    }
+  },
+  {
+    "dissect": {
+      "pattern": "%{source.ip}:%{source.port}",
+      "ignore_failure": true,
+      "field": "source.ip_port"
+    }
+  },
+  {
+    "dissect": {
+      "pattern": "%{destination.ip}:%{destination.port}",
+      "ignore_failure": true,
+      "field": "destination.ip_port"
+    }
+  },
+  {
+    "convert": {
+      "ignore_failure": true,
+      "field": "source.port",
+      "type": "integer"
+    }
+  },
+  {
+    "convert": {
+      "ignore_failure": true,
+      "field": "destination.port",
+      "type": "integer"
+    }
+  },
+  {
+    "convert": {
+      "ignore_failure": true,
+      "field": "http.response.status_code",
+      "type": "integer"
+    }
+  },
+  {
+    "convert": {
+      "ignore_failure": true,
+      "field": "http.response.body.bytes",
+      "type": "integer"
+    }
+  },
+  {
+    "set": {
+      "ignore_failure": true,
+      "field": "event.kind",
+      "value": "event"
+    }
+  },
+  {
+    "set": {
+      "ignore_failure": true,
+      "field": "event.category",
+      "value": [
+        "threat"
+      ]
+    }
+  },
+  {
+    "set": {
+      "field": "event.type",
+      "value": [
+        "indicator"
+      ]
+    }
+  },
+  {
+    "rename": {
+      "ignore_failure": true,
+      "field": "rule.category",
+      "target_field": "event.action"
+    }
+  },
+  {
+    "rename": {
+      "ignore_missing": true,
+      "field": "host",
+      "target_field": "syslog_hostname"
+    }
+  },
+  {
+    "rename": {
+      "ignore_failure": true,
+      "field": "payload",
+      "target_field": "url.original"
+    }
+  },
+  {
+    "script": {
+      "ignore_failure": true,
+      "description": "将事件 severity 的中文描述（低 / 中 / 高）映射为数字等级，将事件 outcome 的中文（尝试 / 成功）和网络 direction 的数字（1/0）转换为标准化值，并从含 \"解析域名\" 的消息中提取域名存入 DNS 相关字段。",
+      "source": "def severityMap = [\r             '低': 1,\r             '中': 2,\r             '高': 3\r           ];\r           \r           if (ctx.event != null && ctx.event.severity != null) {\r             ctx.event.severity = severityMap.getOrDefault(ctx.event.severity, 0);\r           }\r           \r           // Set threat outcome\r           if (ctx.event != null && ctx.event.outcome != null) {\r             if (ctx.event.outcome == '尝试') {\r               ctx.event.outcome = 'attempted';\r             } else if (ctx.event.outcome == '成功') {\r               ctx.event.outcome = 'success';\r             }\r           }\r           \r           // Set network direction\r           if (ctx.network != null && ctx.network.direction != null) {\r             if (ctx.network.direction == '1') {\r               ctx.network.direction = 'inbound';\r             } else if (ctx.network.direction == '0') {\r               ctx.network.direction = 'outbound';\r             }\r           }\r           \r           // Extract domain from DNS events\r           if (ctx.message != null && ctx.message.contains(\"解析域名\")) {\r             def matcher = /解析域名:?\\s*([^\\s<]+)/.matcher(ctx.message);\r             if (matcher.find()) {\r               ctx.dns = [\"question\": [\"name\": matcher.group(1)]];\r             }\r           }",
+      "lang": "painless"
+    }
+  },
+  {
+    "script": {
+      "ignore_failure": true,
+      "description": "确保 HTTP 响应相关父字段存在，对响应体原始字符串进行 HTML 实体反转义，提取标题、表单信息、输入字段和 HTML 注释等内容并整理为解析结果，最终将原始内容和解析结果以对象形式存入响应体字段。",
+      "source": "// 1. 确保父字段存在（避免null错误）\r         ctx.http = ctx.http ?: [:];\r         ctx.http.response = ctx.http.response ?: [:];\r         // 关键修正：从http.response.body（字符串）读取原始内容\r         def rawBody = ctx.http.response.body; \r         if (rawBody == null || !(rawBody instanceof String)) {\r           return; // 若body为空，直接退出\r         }\r         \r         // 2. HTML实体反转义（&lt;→<，&gt;→>）\r         def unescapedBody = rawBody\r           .replace(\"&lt;\", \"<\")\r           .replace(\"&gt;\", \">\")\r           .replace(\"&quot;\", \"\\\"\")\r           .replace(\"&amp;\", \"&\");\r         \r         // 3. 初始化解析结果\r         def parsed = [:];\r         \r         // 4. 提取标题（<title>...</title>）\r         def titleMatcher = /<title>([^<]+)<\\/title>/.matcher(unescapedBody);\r         if (titleMatcher.find()) {\r           parsed.html_title = titleMatcher.group(1).trim();\r         }\r         \r         // 5. 提取表单method和action\r         def formMatcher = /<form\\s+method=\"([^\"]+)\"\\s+action=\"([^\"]+)\"/.matcher(unescapedBody);\r         if (formMatcher.find()) {\r           parsed.form_method = formMatcher.group(1).trim();\r           parsed.form_action = formMatcher.group(2).trim();\r         }\r         \r         // 6. 提取input字段\r         def inputList = [];\r         def inputMatcher = /<input\\s+([^>]+)>/.matcher(unescapedBody);\r         while (inputMatcher.find()) {\r           def attrs = inputMatcher.group(1);\r           def input = [:];\r           // 提取name属性\r           def nameMatcher = /name=\"([^\"]+)\"/.matcher(attrs);\r           if (nameMatcher.find()) {\r             input.name = nameMatcher.group(1).trim();\r           }\r           // 提取type属性\r           def typeMatcher = /type=\"([^\"]+)\"/.matcher(attrs);\r           if (typeMatcher.find()) {\r             input.type = typeMatcher.group(1).trim();\r           }\r           // 提取value属性\r           def valueMatcher = /value=\"([^\"]+)\"/.matcher(attrs);\r           if (valueMatcher.find()) {\r             input.value = valueMatcher.group(1).trim();\r           }\r           if (!input.isEmpty()) {\r             inputList.add(input);\r           }\r         }\r         if (!inputList.isEmpty()) {\r           parsed.input_fields = inputList;\r         }\r         \r         // 7. 提取HTML注释\r         def commentList = [];\r         def commentMatcher = /<!--([^-->]+)-->/.matcher(unescapedBody);\r         while (commentMatcher.find()) {\r           def comment = commentMatcher.group(1).trim();\r           if (comment.length() > 0) {\r             commentList.add(comment);\r           }\r         }\r         if (!commentList.isEmpty()) {\r           parsed.html_comments = commentList;\r         }\r         \r         // 8. 存储结果：将原始字符串转为对象，新增parsed字段\r         ctx.http.response.body = [\r           \"original\": rawBody, // 保留原始转义内容\r           \"parsed\": parsed     // 存储解析结果\r         ];",
+      "lang": "painless"
+    }
+  },
+  {
+    "script": {
+      "ignore_failure": true,
+      "description": "确保 HTTP 响应体对象存在，统计原始内容中 标签的数量并存入解析字段，同时清理原始内容末尾连续的 标签，最后保存更新后的解析字段。",
+      "source": "// 1. 确保body对象存在\r         ctx.http = ctx.http ?: [:];\r         ctx.http.response = ctx.http.response ?: [:];\r         ctx.http.response.body = ctx.http.response.body ?: [:];\r         def original = ctx.http.response.body.original;\r         def parsed = ctx.http.response.body.parsed ?: [:];\r         \r         if (original != null && original instanceof String) {\r           // 2. 统计<br/>的数量（匹配转义前的<br/>）\r           def brMatcher = /<br\\/>/.matcher(original);\r           int brCount = 0;\r           while (brMatcher.find()) {\r             brCount++;\r           }\r           parsed.br_count = brCount;  // 存入parsed\r         \r           // 3. 净化original：移除末尾连续的<br/>（保留核心HTML）\r           // 正则：匹配末尾所有连续的<br/>\r           def cleanedOriginal = original.replaceAll(/(<br\\/>)+$/, \"\");\r           ctx.http.response.body.original = cleanedOriginal;  // 更新original\r         }\r         \r         // 4. 保存更新后的parsed\r         ctx.http.response.body.parsed = parsed;",
+      "lang": "painless"
+    }
+  },
+  {
+    "script": {
+      "ignore_failure": true,
+      "description": "初始化 ECS 规范的 HTTP 响应体相关嵌套字段，将解析出的 HTML 标题、表单信息等从临时解析字段映射到标准 ECS 路径，从原始内容中提取样式和注释补充到对应 ECS 字段，并移除临时解析字段以精简结构",
+      "source": " // 1. 初始化ECS所需的父字段（符合ECS结构）\r         ctx.http = ctx.http ?: [:];\r         ctx.http.response = ctx.http.response ?: [:];\r         ctx.http.response.body = ctx.http.response.body ?: [:];\r         // 初始化HTML相关的ECS嵌套字段\r         ctx.http.response.body.html = [:];\r         ctx.http.response.body.html.form = [:]; // 表单相关ECS字段\r         \r         // 2. 从现有parsed提取字段，映射到ECS路径\r         def parsed = ctx.http.response.body.parsed ?: [:];\r         // 标题映射\r         if (parsed.html_title != null) {\r           ctx.http.response.body.html.title = parsed.html_title;\r         }\r         // 表单方法/路径映射\r         if (parsed.form_method != null) {\r           ctx.http.response.body.html.form.method = parsed.form_method;\r         }\r         if (parsed.form_action != null) {\r           ctx.http.response.body.html.form.action = parsed.form_action;\r         }\r         // 表单字段映射\r         if (parsed.input_fields != null) {\r           ctx.http.response.body.html.form.fields = parsed.input_fields;\r         }\r         // 换行符数量映射\r         if (parsed.br_count != null) {\r           ctx.http.response.body.html.br_count = parsed.br_count;\r         }\r         \r         // 3. 从original提取样式（<style>...</style>），补充到ECS\r         def original = ctx.http.response.body.original;\r         if (original != null && original instanceof String) {\r           // 提取样式内容\r           def styleMatcher = /<style[^>]*>([\\s\\S]*?)<\\/style>/.matcher(original);\r           if (styleMatcher.find()) {\r             ctx.http.response.body.html.style = styleMatcher.group(1).trim();\r           }\r           // 提取HTML注释（补充之前未提取的注释）\r           def commentMatcher = /<!--([\\s\\S]*?)-->/.matcher(original);\r           def comments = [];\r           while (commentMatcher.find()) {\r             def comment = commentMatcher.group(1).trim();\r             if (comment.length() > 0) {\r               comments.add(comment);\r             }\r           }\r           if (!comments.isEmpty()) {\r             ctx.http.response.body.html.comments = comments;\r           }\r         }\r         \r         // 4. 移除旧的parsed字段（可选，保持结构简洁）\r         ctx.http.response.body.remove(\"parsed\");",
+      "lang": "painless"
+    }
+  },
+  {
+    "remove": {
+      "ignore_failure": true,
+      "ignore_missing": true,
+      "field": [
+        "month",
+        "day",
+        "time",
+        "year",
+        "source.ip_port",
+        "destination.ip_port",
+        "app_type",
+        "threat.tactic.stage",
+        "knowledge.id"
+      ]
+    }
+  },
+  {
+    "script": {
+      "description": "清理空值字段",
+      "source": "// 定义递归函数：检查并删除Map中的空值字段\r       void cleanEmptyFields(Map map) {\r         // 遍历当前Map的所有字段（复制keySet避免遍历中修改结构导致异常）\r         def fields = new ArrayList(map.keySet());\r         for (def field : fields) {\r           def value = map.get(field);\r           \r           // 跳过系统字段（如@timestamp、_ingest等，避免误删核心元数据）\r           if (field.startsWith(\"@\") || field.startsWith(\"_\")) {\r             continue;\r           }\r           \r           // 判断是否为空值（null、空字符串、空数组、空Map）\r           boolean isEmpty = false;\r           if (value == null) {\r             isEmpty = true;\r           } else if (value instanceof String) {\r             isEmpty = value.trim().isEmpty(); // 空字符串或纯空格\r           } else if (value instanceof List) {\r             isEmpty = value.isEmpty(); // 空数组\r           } else if (value instanceof Map) {\r             // 如果是嵌套Map，先递归清理子字段\r             cleanEmptyFields(value);\r             // 子字段清理后，若当前Map为空，则标记为需删除\r             isEmpty = value.isEmpty();\r           }\r           \r           // 空值字段执行删除\r           if (isEmpty) {\r             map.remove(field);\r           }\r         }\r       }\r       \r       // 从根节点（ctx）开始清理（ctx是整个文档的Map）\r       cleanEmptyFields(ctx);",
+      "lang": "painless"
+    }
+  }
+]
