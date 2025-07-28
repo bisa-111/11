@@ -1,1 +1,9 @@
-
+移除指定字段
+ ```json
+        {
+          "remove": {
+            "description": "Remove the temp_field",
+            "field": "temp_field"
+          }
+        }
+        ```
