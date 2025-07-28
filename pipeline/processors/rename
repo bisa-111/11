@@ -1,1 +1,10 @@
-
+重命名字段。
+        ```json
+        {
+          "rename": {
+            "description": "Rename old_field to new_field",
+            "field": "old_field",
+            "target_field": "new_field"
+          }
+        }
+        ```
